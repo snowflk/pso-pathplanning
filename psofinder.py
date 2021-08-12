@@ -1,11 +1,5 @@
-"""
-Metaheuristic Minimization Using Particle Swarm Optimization.
-
-Copyright (c) 2021 Gabriele Gilardi
-"""
-
 import numpy as np
-from util import make_velocity_vector, min_distance_to_obstacles
+from util import min_distance_to_obstacles
 from pso import PSO
 
 
@@ -16,13 +10,10 @@ class PSOFinder:
         self.lb = np.concatenate([np.zeros(n_waypoints * 2), np.zeros(n_waypoints + 1)])
         self.ub = np.concatenate([np.ones(n_waypoints * 2) * size, np.ones(n_waypoints + 1) * max_v])
         self.opt = None
-        self.robot = None
         self.population = population
         self.epochs = epochs
         self.last_pos = np.ones(2) * -1
 
-    def set_robot(self, robot):
-        self.robot = robot
 
     def compile_fitnessfunc(self, X, args):
         """
