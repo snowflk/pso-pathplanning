@@ -1,3 +1,9 @@
+"""
+Local Path Planning using Particle Swarm Optimization
+
+Copyright (c) 2021 Thien Phuc Tran
+"""
+
 import numpy as np
 from util import min_distance_to_obstacles
 from pso import PSO
@@ -13,7 +19,6 @@ class PSOFinder:
         self.population = population
         self.epochs = epochs
         self.last_pos = np.ones(2) * -1
-
 
     def compile_fitnessfunc(self, X, args):
         """
@@ -38,7 +43,7 @@ class PSOFinder:
         n_points = waypoints.shape[1] // 2
         n_particles = waypoints.shape[0]
 
-        # Make N copies, add a new axis for N particles, then combine them into a single batch
+        # Make N copies, add a new axis for N particles, then combine them into a single batch n_particles*n_obstacles
         obstacles = np.expand_dims(obstacles, axis=0)
         obstacles_x = np.tile(obstacles[:, :, :2], (n_particles, 1, 1)).reshape(-1, 2)
         obstacles_v = np.tile(obstacles[:, :, 2:4], (n_particles, 1, 1)).reshape(-1, 2)
@@ -50,17 +55,21 @@ class PSOFinder:
                       np.tile(np.array(target).reshape(1, 1, 2), (n_particles, 1, 1))]
         points = np.concatenate(points_arr, axis=1)
         diff = np.diff(points, axis=1)
+        # Compute length for each segment and compute the distance cost and time cost
         s = np.sqrt(np.sum(np.square(diff), axis=-1))  # length of each segment (particles, segments)
-        d_cost = np.sum(s, axis=1)
         t_seg = s / V  # time for each segment
         t_cost = np.sum(t_seg, axis=1)
+        d_cost = np.sum(s, axis=1)
+
+        # Compute collision cost (safety cost)
         c_cost = np.zeros((n_particles, self.n_waypoints + 1))
 
-        # cumulated values
+        # cumulated position shift of the obstacles after each segment
         obs_dpos = np.zeros((n_particles * n_obstacles, 2))
 
         direction = diff / np.tile(np.linalg.norm(diff, axis=2).reshape(n_particles, self.n_waypoints + 1, 1),
                                    (1, 1, 2))
+
         angles = np.zeros((n_particles, self.n_waypoints))
 
         for i in range(self.n_waypoints + 1):
@@ -70,9 +79,9 @@ class PSOFinder:
                 angles[:, i - 1] = np.degrees(np.arccos(np.einsum('ij,ij->i', direction[:, i - 1], direction[:, i])))
 
             t = np.tile(t_seg[:, i].reshape(-1, 1, 2), (1, n_obstacles, 2)).reshape(-1, 2)
-            robot_v_ori = p2 - p1
-            robot_v_ori2 = robot_v_ori / np.tile(np.linalg.norm(robot_v_ori, axis=1).reshape(-1, 1), (1, 2))
-            robot_v = robot_v_ori2 * np.tile(V[:, i].reshape(n_particles, 1, 1), (1, n_obstacles, 2)).reshape(-1, 2)
+            robot_v_dir = p2 - p1
+            robot_v_dir_unit = robot_v_dir / np.tile(np.linalg.norm(robot_v_dir, axis=1).reshape(-1, 1), (1, 2))
+            robot_v = robot_v_dir_unit * np.tile(V[:, i].reshape(n_particles, 1, 1), (1, n_obstacles, 2)).reshape(-1, 2)
 
             obs_pos = obstacles_x + obs_dpos
             obs_v = obstacles_v
