@@ -28,7 +28,7 @@ class DynamicObject:
 
     def set_direction_and_velocity(self, target, v):
         veloc_dir = target - self._x
-        veloc_dir = veloc_dir / np.linalg.norm(veloc_dir)
+        veloc_dir = veloc_dir / (np.linalg.norm(veloc_dir) + 1e-9)
         self._v = veloc_dir * v
         self._logger.info(f"Next way point set: {self._next_waypoint}, velocity: {v}")
 
@@ -51,18 +51,19 @@ class DynamicObject:
 
 
 class Robot(DynamicObject):
-    def __init__(self, path_planner, goal, sensor_range, name='Noname', **kwargs):
+    def __init__(self, path_planner, goal, sensor_range, max_v=2, name='Noname', **kwargs):
         super(Robot, self).__init__(**kwargs)
         self._planner = path_planner
         self._goal = np.array(goal, dtype=np.float64)
         self._sensor_range = sensor_range
         self._nearby = set()
         self._next_waypoint = None
-        self._max_v = 5 * np.sqrt(2)
+        self._max_v = max_v
         self._name = name
         self._logger = make_logger(name)
         self._current_plan = None
         self._dead = False
+        self._goal_reached = False
 
     def notify_sensor(self, nearby_objs):
         self._nearby.clear()
@@ -85,15 +86,19 @@ class Robot(DynamicObject):
         return self._planner.should_replan(self._nearby)
 
     def step(self):
-        if self.is_dead():
+        if self.is_dead() or self.goal_reached():
             return
-
         self._planner.tick_callback()
+        dist_to_goal = np.linalg.norm(self.goal - self.x)
+        if dist_to_goal < 2:
+            self._goal_reached = True
+            self._logger.info("Reached goal")
+            return
         # Check whether way point is reached
         if self._next_waypoint is not None:
             dist_remaining = np.linalg.norm(self._next_waypoint - self._x)
-            self._logger.info(f"{dist_remaining:.2f}m more to reach waypoint ({self._next_waypoint})")
-            if dist_remaining < 5:
+            self._logger.info(f"{dist_remaining:.2f}m more to reach waypoint {self._next_waypoint}")
+            if dist_remaining < 2:
                 self._next_waypoint = None
                 self._logger.info(f"Target way point reached")
 
@@ -108,13 +113,15 @@ class Robot(DynamicObject):
             next_veloc = nav_command.get('next_v', self._max_v)
             self.set_direction_and_velocity(self._next_waypoint, next_veloc)
         else:
-            self._logger.info(f"Nothing new, stick to the old command")
             if self._next_waypoint is None:
-                raise RuntimeError('There is currently no plan.')
+                self._logger.info(f"Could not find any path and doesn't know what to do")
+                return
+            self._logger.info(f"Nothing new, stick to the old command")
         # Prevent overshooting
         dist_remaining = np.linalg.norm(self._next_waypoint - self._x)
         if dist_remaining < np.linalg.norm(self.v):
-            self.set_velocity(dist_remaining)
+            self._logger.info("Slow down to prevent overshooting")
+            self.set_direction_and_velocity(self._next_waypoint, dist_remaining)
         super().step()
 
     def dead(self):
@@ -123,6 +130,9 @@ class Robot(DynamicObject):
 
     def is_dead(self):
         return self._dead
+
+    def goal_reached(self):
+        return self._goal_reached
 
     @property
     def goal(self):
@@ -141,11 +151,12 @@ class Obstacle(DynamicObject):
 
 
 class World:
-    def __init__(self, robots, obstacles):
+    def __init__(self, robots, obstacles, map_size=100):
         self._robots: Set[Robot] = set(robots)
         self._obstacles: Set[Obstacle] = set(obstacles)
         self._all: Set[DynamicObject] = self._obstacles.union(self._robots)
         self._logger = make_logger('World')
+        self._map_size = map_size
 
     def step(self):
         # Notify the robots about their surrounding (fake sensor)
@@ -161,6 +172,13 @@ class World:
 
         for obj in self._all:
             obj.step()
+            # Rebound
+            if isinstance(obj, Obstacle):
+                new_v = obj.v.copy()
+                for i in range(2):
+                    if obj.x[i] < obj.size or obj.x[i] > self._map_size - obj.size:
+                        new_v[i] *= -1
+                obj.set_velocity(new_v)
 
     def get_objects(self):
         return self._all

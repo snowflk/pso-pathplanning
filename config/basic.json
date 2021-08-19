@@ -1,0 +1,52 @@
+{
+  "width": 100,
+  "height": 100,
+  "min_v": 1,
+  "max_v": 3,
+  "robots": [
+    {
+      "start_x": 5,
+      "start_y": 5,
+      "size": 3,
+      "sensor_range": 30,
+      "goal_x": 95,
+      "goal_y": 95,
+      "color": "0,255,0"
+    }
+  ],
+  "obstacles": [
+    {
+      "start_x": 50,
+      "start_y": 15,
+      "size": 5,
+      "v_x": -0.25,
+      "v_y": 0.5
+    },
+    {
+      "start_x": 15,
+      "start_y": 50,
+      "size": 5,
+      "v_x": 0.5,
+      "v_y": -0.25
+    },
+    {
+      "start_x": 25,
+      "start_y": 25,
+      "size": 7
+    },
+    {
+      "start_x": 75,
+      "start_y": 60,
+      "size": 5,
+      "v_x": -0.25,
+      "v_y": -0.5
+    },
+    {
+      "start_x": 50,
+      "start_y": 75,
+      "size": 5,
+      "v_x": -0.5,
+      "v_y": -0.25
+    }
+  ]
+}

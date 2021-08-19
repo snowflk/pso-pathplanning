@@ -2,7 +2,7 @@
 Metaheuristic Minimization Using Particle Swarm Optimization.
 
 Copyright (c) 2021 Gabriele Gilardi
-Source: https://github1s.com/gabrielegilardi/PathPlanning
+Source: https://github.com/gabrielegilardi/PathPlanning
 """
 
 import numpy as np

@@ -1,0 +1,110 @@
+{
+  "width": 100,
+  "height": 100,
+  "min_v": 0,
+  "max_v": 5,
+  "robots": [
+    {
+      "start_x": 5,
+      "start_y": 5,
+      "size": 3,
+      "sensor_range": 20,
+      "goal_x": 90,
+      "goal_y": 90,
+      "color": "0,255,0"
+    }
+  ],
+  "obstacles": [
+    {
+      "start_x": 32,
+      "start_y": 94,
+      "v_x": 0.3,
+      "v_y": 0.5,
+      "size": 3
+    },
+    {
+      "start_x": 97,
+      "start_y": 49,
+      "v_x": -0.9,
+      "v_y": -0.8,
+      "size": 4
+    },
+    {
+      "start_x": 35,
+      "start_y": 65,
+      "v_x": 0.1,
+      "v_y": -0.4,
+      "size": 4
+    },
+    {
+      "start_x": 40,
+      "start_y": 76,
+      "v_x": -0.4,
+      "v_y": 0.8,
+      "size": 3
+    },
+    {
+      "start_x": 52,
+      "start_y": 49,
+      "v_x": 0.7,
+      "v_y": -0.2,
+      "size": 4
+    },
+    {
+      "start_x": 77,
+      "start_y": 51,
+      "v_x": -0.9,
+      "v_y": 0.4,
+      "size": 3
+    },
+    {
+      "start_x": 34,
+      "start_y": 85,
+      "v_x": 1.0,
+      "v_y": 0.0,
+      "size": 4
+    },
+    {
+      "start_x": 33,
+      "start_y": 71,
+      "v_x": -1.0,
+      "v_y": -0.7,
+      "size": 3
+    },
+    {
+      "start_x": 26,
+      "start_y": 27,
+      "v_x": -0.6,
+      "v_y": -0.7,
+      "size": 4
+    },
+    {
+      "start_x": 64,
+      "start_y": 65,
+      "v_x": 0.1,
+      "v_y": -0.7,
+      "size": 3
+    },
+    {
+      "start_x": 24,
+      "start_y": 24,
+      "v_x": -0.1,
+      "v_y": -0.1,
+      "size": 4
+    },
+    {
+      "start_x": 95,
+      "start_y": 21,
+      "v_x": -0.3,
+      "v_y": -0.6,
+      "size": 4
+    },
+    {
+      "start_x": 81,
+      "start_y": 50,
+      "v_x": 0.2,
+      "v_y": -1.0,
+      "size": 3
+    }
+  ]
+}

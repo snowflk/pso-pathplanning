@@ -209,7 +209,7 @@ class DStarLite:
         obstacles = self.convert_obstacles(obstacles)
         if self.g[self.start.x][self.start.y] == math.inf:
             # No path possible
-            raise RuntimeError('No path possible')
+            return None
         self.start = min(self.succ(self.start),
                          key=lambda sprime:
                          self.c(self.start, sprime) +

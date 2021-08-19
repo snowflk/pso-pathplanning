@@ -4,7 +4,7 @@ import numpy as np
 
 from util import min_distance_to_obstacles
 from dstarlite import DStarLite
-from psofinder import PSOFinder
+from psofinder import PSOFinder, PolarPSOFinder
 from world import DynamicObject
 
 
@@ -23,13 +23,22 @@ class PathPlanner:
 
 
 class PSOPlanner(PathPlanner):
-    def __init__(self, n_waypoints, max_velocity=10, population=100, epochs=500, **kwargs):
+    def __init__(self, n_waypoints, max_velocity=10, population=100, epochs=500, use_polar=False,
+                 max_angle=60, **kwargs):
         super(PSOPlanner, self).__init__(**kwargs)
-        self._pso = PSOFinder(n_waypoints=n_waypoints,
-                              size=self._map_size[0],
-                              population=population,
-                              epochs=epochs,
-                              max_v=max_velocity)
+        if not use_polar:
+            self._pso = PSOFinder(n_waypoints=n_waypoints,
+                                  size=self._map_size[0],
+                                  population=population,
+                                  epochs=epochs,
+                                  max_v=max_velocity)
+        else:
+            self._pso = PolarPSOFinder(n_waypoints=n_waypoints,
+                                       size=self._map_size[0],
+                                       population=population,
+                                       epochs=epochs,
+                                       max_v=max_velocity,
+                                       max_angle=max_angle)
         self._max_v = max_velocity
         self._n_waypoints = n_waypoints
         self._population = population
@@ -54,6 +63,12 @@ class PSOPlanner(PathPlanner):
         osize = obstacles[:, -1]
         dist_to_robot = min_distance_to_obstacles(current_pos, next_wp, current_v, ox, ov, osize, self._robot_size)
         if np.any(dist_to_robot < 0):
+            collided = (dist_to_robot < 0).nonzero()
+            print(f"Collision detected while moving from {current_pos} to {next_wp}")
+            for i in collided:
+                print(f"With #{i}: {obstacles[i]}", dist_to_robot[i])
+
+            print(dist_to_robot)
             return True
         return False
 
@@ -80,33 +95,37 @@ class PSOPlanner(PathPlanner):
         ])
 
         if self._current_plan_wps is not None and np.linalg.norm(
-                self._current_plan_wps[self._current_plan_idx] - current_pos) < 5:
+                self._current_plan_wps[self._current_plan_idx] - current_pos) < 2:
             self._on_waypoint_reached()
 
         if not self.should_replan(current_pos, current_v, obstacles):
             if not self._gave_next_step:
                 return self._get_current_nav_command()
             return None
-
+        print("Should replan")
         self._obs_memory = obstacles.copy()
         self._obs_memory_t = self._t
+        while True:
+            waypoints, velocities, cost = self._pso.calculate_path(obstacles=obstacles,
+                                                                   target=goal,
 
-        waypoints, velocities, _ = self._pso.calculate_path(obstacles=obstacles,
-                                                            target=goal,
-                                                            robot_pos=current_pos,
-                                                            robot_size=self._robot_size)
-        self._current_plan_wps = np.vstack([waypoints, goal])
-        self._current_plan_vs = velocities
-        self._current_plan_idx = 0
+                                                                   robot_pos=current_pos,
+                                                                   robot_size=self._robot_size)
+            print("New path with cost", cost, len(obstacle_info))
+            self._current_plan_wps = np.vstack([waypoints, goal])
+            self._current_plan_vs = velocities
+            self._current_plan_idx = 0
+            # if not self.should_replan(current_pos, current_v, obstacles):
+            break
         return self._get_current_nav_command()
 
 
 class DSLPlanner(PathPlanner):
     def __init__(self, cell_size=10, **kwargs):
         super(DSLPlanner, self).__init__(**kwargs)
-        self._cell_size = cell_size
-        self._maxx = self._map_size[0] // self._cell_size
-        self._maxy = self._map_size[1] // self._cell_size
+        self._cell_size = int(cell_size)
+        self._maxx = int(self._map_size[0] // self._cell_size)
+        self._maxy = int(self._map_size[1] // self._cell_size)
         self._dsl = DStarLite(map_size=(self._maxx, self._maxy))
         self._init = False
         self._goal = None
@@ -119,7 +138,7 @@ class DSLPlanner(PathPlanner):
             for j in range(self._maxy):
                 pos = np.array([i * self._cell_size, j * self._cell_size])
                 for inf in obstacle_info:
-                    if inf.did_collide_pos(pos, self._robot_size + 10):
+                    if inf.did_collide_pos(pos, self._robot_size + 4):
                         obs.append(np.array([i, j]))
 
         current_pos = (current_pos / self._cell_size).astype(int)
@@ -130,6 +149,8 @@ class DSLPlanner(PathPlanner):
             self._dsl.initialize(current_pos, goal, obs)
         # Get path and convert grid coordinates back to normal ones
         next_pos = self._dsl.find_path(current_pos, goal, obstacles=obs)
+        if next_pos is None:
+            return None
         return {
             'next_pos': next_pos.astype(np.float64) * self._cell_size
         }
