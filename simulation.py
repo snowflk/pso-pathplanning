@@ -19,6 +19,9 @@ OBS_COLOR = (255, 0, 0)
 BORDER_COLOR = (50, 50, 50)
 SENSOR_RANGE_COLOR = '#dddddd'
 WIN_WIDTH, WIN_HEIGHT = 600, 600
+LOG_DIR = './logs'
+if not os.path.exists(LOG_DIR):
+    os.makedirs(LOG_DIR, exist_ok=True)
 
 
 def make_planner(planner_type, robot_cfg, cfg):
@@ -27,12 +30,12 @@ def make_planner(planner_type, robot_cfg, cfg):
     if planner_type == 'PSO' or planner_type == 'PPSO':
         return PSOPlanner(n_waypoints=3,
                           max_velocity=cfg['max_v'],
-                          population=20,
+                          population=50,
                           map_size=map_size,
-                          epochs=3000,
+                          epochs=1000,
                           robot_size=robot_cfg['size'],
                           use_polar=planner_type == 'PPSO',
-                          max_angle=60)
+                          max_angle=90, log_dir=LOG_DIR)
     cell_size = cfg['max_v'] / np.sqrt(2)
     return DSLPlanner(robot_size=robot_cfg['size'],
                       cell_size=cell_size,
@@ -148,7 +151,6 @@ class Simulation:
 
         self._field_width = self._config['width'] or self.DEFAULT_WIDTH
         self._field_height = self._config['height'] or self.DEFAULT_HEIGHT
-        # self._screen = pygame.display.set_mode((self._win_width, self._win_height))
         self._screen = pygame.display.set_mode((WIN_WIDTH, WIN_HEIGHT))
         self._clock = pygame.time.Clock()
         pygame.display.set_caption(self.TITLE)
@@ -207,8 +209,8 @@ class Simulation:
 
 
 if __name__ == '__main__':
-    config_file = os.getenv('CFG', './config/obs_rich.json')
-    planner_type = os.getenv('PLANNER', 'PPSO')
+    config_file = os.getenv('CFG', './config/basic.json')
+    planner_type = os.getenv('PLANNER', 'PSO')
     image_out_dir = os.getenv('IMG_OUT', 'experiments')
     env_name = os.path.splitext(os.path.basename(config_file))[0]
     image_suffix = f"{planner_type}_{env_name}"

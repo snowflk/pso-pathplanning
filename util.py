@@ -62,14 +62,14 @@ def min_distance_to_obstacles(from_pos, to_pos, v, ox, ov, os, robot_size):
 
 
 if __name__ == '__main__':
-    from_pos = np.array([40.27666893,52.76100394]).reshape(1, 2)
-    to_pos = np.array([50, 55]).reshape(1, 2)
+    from_pos = np.array([30, 51]).reshape(1, 2)
+    to_pos = np.array([30, 51]).reshape(1, 2)
     robot_size = 3
 
     v = (to_pos-from_pos).reshape(1, 2)
-    v = v * 1.008457202 / np.linalg.norm(v, axis=-1)
+    v = v * 2.851476 / (np.linalg.norm(v, axis=-1) + 1e-9)
     ox = np.array([
-        [53.4, 50],
+        [45.4, 50],
     ])
     ov = np.array([0.2, 0])
     os = np.ones(ox.shape[0]) * 5

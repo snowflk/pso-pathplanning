@@ -28,7 +28,7 @@ class DynamicObject:
 
     def set_direction_and_velocity(self, target, v):
         veloc_dir = target - self._x
-        veloc_dir = veloc_dir / (np.linalg.norm(veloc_dir) + 1e-9)
+        veloc_dir = veloc_dir / (np.linalg.norm(veloc_dir, axis=-1) + 1e-9)
         self._v = veloc_dir * v
         self._logger.info(f"Next way point set: {self._next_waypoint}, velocity: {v}")
 
@@ -90,7 +90,7 @@ class Robot(DynamicObject):
             return
         self._planner.tick_callback()
         dist_to_goal = np.linalg.norm(self.goal - self.x)
-        if dist_to_goal < 2:
+        if dist_to_goal < 0.1:
             self._goal_reached = True
             self._logger.info("Reached goal")
             return
@@ -98,7 +98,7 @@ class Robot(DynamicObject):
         if self._next_waypoint is not None:
             dist_remaining = np.linalg.norm(self._next_waypoint - self._x)
             self._logger.info(f"{dist_remaining:.2f}m more to reach waypoint {self._next_waypoint}")
-            if dist_remaining < 2:
+            if dist_remaining < 0.1:
                 self._next_waypoint = None
                 self._logger.info(f"Target way point reached")
 
@@ -160,12 +160,20 @@ class World:
 
     def step(self):
         # Notify the robots about their surrounding (fake sensor)
+        should_end = True
+        for r in self._robots:
+            if not r.goal_reached():
+                should_end = False
+        if should_end:
+            return
         for r in self._robots:
             sensed = set()
             for other in self._all:
                 if r != other and r.can_detect_using_sensor(other):
                     sensed.add(other)
                 if r != other and r.did_collide(other):
+                    if isinstance(r, Robot) and isinstance(other, Robot) and (r.goal_reached() or other.goal_reached()):
+                        continue
                     self._logger.info(f"{r.name} crashed")
                     r.dead()
             r.notify_sensor(sensed)

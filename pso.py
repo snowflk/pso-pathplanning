@@ -10,7 +10,7 @@ import numpy as np
 
 def PSO(func, LB, UB, nPop=40, epochs=500, K=0, phi=2.05, vel_fact=0.5,
         conf_type='RB', IntVar=None, normalize=False, rad=0.1, args=[],
-        Xinit=None):
+        Xinit=None, log_output=None):
     """
     func            Function to minimize
     LB              Lower boundaries of the search space
@@ -117,6 +117,7 @@ def PSO(func, LB, UB, nPop=40, epochs=500, K=0, phi=2.05, vel_fact=0.5,
                                                agent_best_cost)
 
     # Main loop
+    swarm_best_cost_arr = []
     for epoch in range(epochs):
 
         # Determine the updated velocity for each agent
@@ -199,6 +200,10 @@ def PSO(func, LB, UB, nPop=40, epochs=500, K=0, phi=2.05, vel_fact=0.5,
             group_best_pos, p_equal_g, = group_best(informants, agent_best_pos,
                                                     agent_best_cost)
 
+        swarm_best_cost_arr.append(str(swarm_best_cost) + '\n')
+    if log_output is not None:
+        with open(log_output, 'w') as f:
+            f.writelines(swarm_best_cost_arr)
     # If necessary de-normalize and determine the (normalized) distance between
     # the best particle and all the others
     if (normalize):

@@ -9,8 +9,16 @@ from util import min_distance_to_obstacles, make_velocity_vector
 from pso import PSO
 
 
+def angle_rowwise(A, B):
+    p1 = np.einsum('ij,ij->i', A, B)
+    p2 = np.einsum('ij,ij->i', A, A)
+    p3 = np.einsum('ij,ij->i', B, B)
+    p4 = p1 / np.sqrt(p2 * p3)
+    return np.arccos(np.clip(p4, -1.0, 1.0)) * 180 / np.pi
+
+
 class PSOFinder:
-    def __init__(self, n_waypoints=7, size=400, population=100, epochs=500, max_v=5):
+    def __init__(self, n_waypoints=7, size=400, population=100, epochs=500, max_v=5, log_file=None):
         self.n_waypoints = n_waypoints
         self.max_v = max_v
         self.lb = np.concatenate([np.zeros(n_waypoints * 2), np.ones(n_waypoints + 1) * 0.1])
@@ -18,7 +26,9 @@ class PSOFinder:
         self.opt = None
         self.population = population
         self.epochs = epochs
+        self.map_size = size
         self.last_pos = np.ones(2) * -1
+        self.log_file = log_file
 
     def compile_fitnessfunc(self, X, args):
         """
@@ -36,7 +46,7 @@ class PSOFinder:
         :param args:
         :return:
         """
-        obstacles, target, robot_pos, robot_size = args
+        obstacles, target, robot_pos, robot_size, robot_v = args
         n_obstacles = obstacles.shape[0]
         waypoints = X[:, :-self.n_waypoints - 1]
         V = X[:, -self.n_waypoints - 1:]
@@ -68,21 +78,23 @@ class PSOFinder:
         # cumulated position shift of the obstacles after each segment
         obs_dpos = np.zeros((n_particles * n_obstacles, 2))
 
-        # direction = diff / np.tile(np.linalg.norm(diff, axis=2).reshape(n_particles, self.n_waypoints + 1, 1),
+        #direction = diff / np.tile(np.linalg.norm(diff, axis=2).reshape(n_particles, self.n_waypoints + 1, 1),
         #                           (1, 1, 2))
 
-        # angles = np.zeros((n_particles, self.n_waypoints))
+        angles = np.zeros((n_particles, self.n_waypoints))
 
         for i in range(self.n_waypoints + 1):
             p1 = np.tile(points[:, i, :].reshape(-1, 1, 2), (1, n_obstacles, 1)).reshape(-1, 2)
             p2 = np.tile(points[:, i + 1, :].reshape(-1, 1, 2), (1, n_obstacles, 1)).reshape(-1, 2)
-            # if i > 0:
-            #    angles[:, i - 1] = np.degrees(np.arccos(np.einsum('ij,ij->i', direction[:, i - 1], direction[:, i])))
+            #if i == self.n_waypoints:
+            #    old_dir = direction[:, i - 1]
+            #    new_dir = direction[:, i]
+            #    angles[:, i - 1] = angle_rowwise(old_dir, new_dir)
 
             t = np.tile(t_seg[:, i].reshape(-1, 1, 2), (1, n_obstacles, 2)).reshape(-1, 2)
             robot_v_dir = p2 - p1
             robot_v_dir_unit = robot_v_dir / (
-                    np.tile(np.linalg.norm(robot_v_dir, axis=1).reshape(-1, 1), (1, 2)) + 1e-4)
+                    np.tile(np.linalg.norm(robot_v_dir, axis=1).reshape(-1, 1), (1, 2)) + 1e-9)
             robot_v = robot_v_dir_unit * np.tile(V[:, i].reshape(n_particles, 1, 1), (1, n_obstacles, 2)).reshape(-1, 2)
 
             obs_pos = obstacles_x + obs_dpos
@@ -90,20 +102,25 @@ class PSOFinder:
             min_dist = min_distance_to_obstacles(p1, p2, robot_v, obs_pos, obstacles_v, obstacles_size + 2, robot_size)
             mask = min_dist < 0
 
-            collision_penalty = -min_dist * mask.astype(int) * 100000 + np.abs(
-                10 * 1. / (min_dist + 1e-4)) * (~mask).astype(int)
+            collision_penalty = -min_dist * mask.astype(int) * 1000000 # + np.abs(
+                # 10 * 1. / (min_dist + 1e-4)) * (~mask).astype(int)
             c_cost[:, i] = collision_penalty.reshape(n_particles, -1).sum(axis=1)
+            #if i > 0 and i < self.n_waypoints:
+            #    c_cost[:, i] += 1 / np.linalg.norm(points_arr[-1][:, 0, :] - points[:, i, :].reshape(-1, 2), axis=-1)
             obs_dpos += t * obstacles_v
 
-        # smoothness_mask = angles > 60
-        # smoothness_cost = np.sum(angles * smoothness_mask.astype(int), axis=1) * 0.1
+        # smoothness_mask = angles > 90
+        # smoothness_cost = np.sum(1000000 * smoothness_mask.astype(int), axis=1)
         # print("C_COST", c_cost.sum(axis=(1, 2)).copy())
-        cost = t_cost * 0.5 + c_cost.sum(axis=1) + d_cost * 2  # + smoothness_cost
+        wpint = waypoints.astype(int)
+
+        boundary_cost = np.sum(((wpint < 0) | (wpint > self.map_size)).astype(int) * 1000000, axis=1)
+        cost = t_cost * 0.5 + c_cost.sum(axis=1) + d_cost * 20  + boundary_cost
         return cost
 
-    def calculate_path(self, obstacles, target, robot_pos, robot_size):
+    def calculate_path(self, obstacles, target, robot_pos, robot_size, robot_v, log_file=None):
         fitness_func = self.compile_fitnessfunc
-        args = [obstacles, target, robot_pos, robot_size]
+        args = [obstacles, target, robot_pos, robot_size, robot_v]
         init_solution = [robot_pos for _ in range(self.n_waypoints)]
         init_solution.append(np.ones(self.n_waypoints + 1) * 0.1)
         init_solution[-1][-1] = self.max_v
@@ -111,7 +128,7 @@ class PSOFinder:
         solution, info = PSO(fitness_func, LB=self.lb, UB=self.ub, nPop=self.population,
                              epochs=self.epochs, args=args,
                              IntVar=[x + 1 for x in range(self.n_waypoints * 2)],
-                             Xinit=init_solution)
+                             Xinit=None, log_output=log_file)
         waypoints = solution[:-self.n_waypoints - 1]
         v = solution[-self.n_waypoints - 1:]
 
@@ -127,10 +144,13 @@ class PolarPSOFinder(PSOFinder):
         self.ub = np.concatenate(
             [np.ones(n_waypoints) * max_angle, np.ones(n_waypoints) * size, np.ones(n_waypoints + 1) * max_v])
 
-    def _to_cartesian(self, X, robot_pos, target):
+    def _to_cartesian(self, X, robot_pos, target, robot_dir):
         Xz = np.copy(X)
         population = X.shape[0]
-        robot_dir = np.tile((target - robot_pos).reshape(1, 2), (population, 1))
+        if np.linalg.norm(robot_dir, axis=-1) == 0:
+            robot_dir = np.tile((target - robot_pos).reshape(1, 2), (population, 1))
+        else:
+            robot_dir = np.tile(robot_dir.reshape(1, 2), (population, 1))
         acc_robot_pos = np.tile(robot_pos.reshape(1, 2), (population, 1))
         for i in range(self.n_waypoints):
             robot_angle = np.arctan2(robot_dir[:, 1], robot_dir[:, 0])
@@ -154,24 +174,25 @@ class PolarPSOFinder(PSOFinder):
         return Xz.copy()
 
     def compile_fitnessfunc(self, X, args):
-        obstacles, target, robot_pos, robot_size = args
-        X = self._to_cartesian(X, robot_pos, target)
+        obstacles, target, robot_pos, robot_size, robot_v = args
+        X = self._to_cartesian(X, robot_pos, target, robot_v)
         return super().compile_fitnessfunc(X, args)
 
-    def calculate_path(self, obstacles, target, robot_pos, robot_size):
+    def calculate_path(self, obstacles, target, robot_pos, robot_size, robot_v, log_file=None):
         fitness_func = self.compile_fitnessfunc
-        args = [obstacles, target, robot_pos, robot_size]
+        args = [obstacles, target, robot_pos, robot_size, robot_v]
         init_solution = [robot_pos for _ in range(self.n_waypoints)]
         init_solution.append(np.ones(self.n_waypoints + 1) * 0.1)
         init_solution[-1][-1] = self.max_v
         init_solution = np.concatenate(init_solution)
         solution, info = PSO(fitness_func, LB=self.lb, UB=self.ub, nPop=self.population,
                              epochs=self.epochs, args=args,
+                             K=0,
+                             rad=0.5,
                              IntVar=[x + 1 for x in range(self.n_waypoints * 2)],
-                             Xinit=init_solution)
-        print("SOL", solution.shape)
-        print("SOL2", np.expand_dims(solution, axis=0).shape)
-        solution = self._to_cartesian(np.expand_dims(solution, axis=0), robot_pos, target)[0]
+                             Xinit=init_solution, log_output=log_file)
+
+        solution = self._to_cartesian(np.expand_dims(solution, axis=0), robot_pos, target, robot_v)[0]
         waypoints = solution[:-self.n_waypoints - 1]
         v = solution[-self.n_waypoints - 1:]
         return waypoints.reshape(-1, 2), v, info[0]

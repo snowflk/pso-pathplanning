@@ -1,7 +1,7 @@
 from abc import abstractmethod
 from typing import Sequence
 import numpy as np
-
+import os
 from util import min_distance_to_obstacles
 from dstarlite import DStarLite
 from psofinder import PSOFinder, PolarPSOFinder
@@ -9,10 +9,12 @@ from world import DynamicObject
 
 
 class PathPlanner:
-    def __init__(self, robot_size=10, map_size=(400, 400), **kwargs):
+    def __init__(self, robot_size=10, map_size=(400, 400), log_dir=None, **kwargs):
         self._robot_size = robot_size
         self._map_size = map_size
         self._t = 0
+        self._log_dir = log_dir
+        self._log_cnt = 0
 
     def tick_callback(self):
         self._t += 1
@@ -58,18 +60,23 @@ class PSOPlanner(PathPlanner):
 
         # Check collision, replan if we'll collide on the way to the next waypoint
         next_wp = self._current_plan_wps[self._current_plan_idx]
+        # In case target wp is already reached, the current_v must be the new one
+        if not self._gave_next_step:
+            current_v = self._current_plan_wps[self._current_plan_idx] - current_pos
+            current_v = current_v * self._current_plan_vs[self._current_plan_idx] / np.linalg.norm(current_v, axis=-1)
         ox = obstacles[:, :2]
         ov = obstacles[:, 2:4]
         osize = obstacles[:, -1]
         dist_to_robot = min_distance_to_obstacles(current_pos, next_wp, current_v, ox, ov, osize, self._robot_size)
         if np.any(dist_to_robot < 0):
             collided = (dist_to_robot < 0).nonzero()
-            print(f"Collision detected while moving from {current_pos} to {next_wp}")
+            print(f"Collision detected while moving from {current_pos} to {next_wp} with v = {current_v} ({np.linalg.norm(current_v, axis=-1)})")
             for i in collided:
                 print(f"With #{i}: {obstacles[i]}", dist_to_robot[i])
 
             print(dist_to_robot)
             return True
+        print("No colision for now")
         return False
 
     def _on_waypoint_reached(self):
@@ -95,7 +102,7 @@ class PSOPlanner(PathPlanner):
         ])
 
         if self._current_plan_wps is not None and np.linalg.norm(
-                self._current_plan_wps[self._current_plan_idx] - current_pos) < 2:
+                self._current_plan_wps[self._current_plan_idx] - current_pos) < 0.1:
             self._on_waypoint_reached()
 
         if not self.should_replan(current_pos, current_v, obstacles):
@@ -106,15 +113,29 @@ class PSOPlanner(PathPlanner):
         self._obs_memory = obstacles.copy()
         self._obs_memory_t = self._t
         while True:
+            log_file = None
+            if self._log_dir is not None:
+                self._log_cnt += 1
+                plannername = self._pso.__class__.__name__
+                log_file = os.path.join(self._log_dir, f"fitness_{plannername}_{self._log_cnt}.txt")
+
             waypoints, velocities, cost = self._pso.calculate_path(obstacles=obstacles,
                                                                    target=goal,
-
                                                                    robot_pos=current_pos,
-                                                                   robot_size=self._robot_size)
+                                                                   robot_size=self._robot_size,
+                                                                   robot_v=current_v,
+                                                                   log_file=log_file)
             print("New path with cost", cost, len(obstacle_info))
+            print("VALIDATE")
+            self.should_replan(current_pos, current_v, obstacles)
+
             self._current_plan_wps = np.vstack([waypoints, goal])
             self._current_plan_vs = velocities
             self._current_plan_idx = 0
+            print("New plan===============")
+            for i in range(len(waypoints) + 1):
+                print(self._current_plan_wps[i], self._current_plan_vs[i])
+            print("=======================")
             # if not self.should_replan(current_pos, current_v, obstacles):
             break
         return self._get_current_nav_command()
