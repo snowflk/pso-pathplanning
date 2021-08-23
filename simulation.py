@@ -28,14 +28,14 @@ def make_planner(planner_type, robot_cfg, cfg):
     map_size = (cfg['width'], cfg['height'])
 
     if planner_type == 'PSO' or planner_type == 'PPSO':
-        return PSOPlanner(n_waypoints=3,
+        return PSOPlanner(n_waypoints=5,
                           max_velocity=cfg['max_v'],
-                          population=50,
+                          population=30,
                           map_size=map_size,
                           epochs=1000,
                           robot_size=robot_cfg['size'],
                           use_polar=planner_type == 'PPSO',
-                          max_angle=90, log_dir=LOG_DIR)
+                          max_angle=60, log_dir=LOG_DIR)
     cell_size = cfg['max_v'] / np.sqrt(2)
     return DSLPlanner(robot_size=robot_cfg['size'],
                       cell_size=cell_size,
@@ -210,7 +210,7 @@ class Simulation:
 
 if __name__ == '__main__':
     config_file = os.getenv('CFG', './config/basic.json')
-    planner_type = os.getenv('PLANNER', 'PSO')
+    planner_type = os.getenv('PLANNER', 'PPSO')
     image_out_dir = os.getenv('IMG_OUT', 'experiments')
     env_name = os.path.splitext(os.path.basename(config_file))[0]
     image_suffix = f"{planner_type}_{env_name}"

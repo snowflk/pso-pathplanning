@@ -67,7 +67,7 @@ class PSOFinder:
         diff = np.diff(points, axis=1)
         # Compute length for each segment and compute the distance cost and time cost
         s = np.sqrt(np.sum(np.square(diff), axis=-1))  # length of each segment (particles, segments)
-        t_seg = s / V  # time for each segment
+        t_seg = np.ceil(s / V).astype(int)  # time for each segment
         t_cost = np.sum(t_seg, axis=1)
 
         d_cost = np.sum(s, axis=1)
@@ -78,23 +78,25 @@ class PSOFinder:
         # cumulated position shift of the obstacles after each segment
         obs_dpos = np.zeros((n_particles * n_obstacles, 2))
 
-        #direction = diff / np.tile(np.linalg.norm(diff, axis=2).reshape(n_particles, self.n_waypoints + 1, 1),
-        #                           (1, 1, 2))
+        direction = diff / np.tile(np.linalg.norm(diff, axis=2).reshape(n_particles, self.n_waypoints + 1, 1),
+                                   (1, 1, 2))
 
         angles = np.zeros((n_particles, self.n_waypoints))
 
         for i in range(self.n_waypoints + 1):
             p1 = np.tile(points[:, i, :].reshape(-1, 1, 2), (1, n_obstacles, 1)).reshape(-1, 2)
             p2 = np.tile(points[:, i + 1, :].reshape(-1, 1, 2), (1, n_obstacles, 1)).reshape(-1, 2)
-            #if i == self.n_waypoints:
-            #    old_dir = direction[:, i - 1]
-            #    new_dir = direction[:, i]
-            #    angles[:, i - 1] = angle_rowwise(old_dir, new_dir)
+
+            if i > 0:
+                old_dir = direction[:, i - 1]
+                new_dir = direction[:, i]
+                angles[:, i - 1] = angle_rowwise(old_dir, new_dir)
 
             t = np.tile(t_seg[:, i].reshape(-1, 1, 2), (1, n_obstacles, 2)).reshape(-1, 2)
             robot_v_dir = p2 - p1
             robot_v_dir_unit = robot_v_dir / (
                     np.tile(np.linalg.norm(robot_v_dir, axis=1).reshape(-1, 1), (1, 2)) + 1e-9)
+
             robot_v = robot_v_dir_unit * np.tile(V[:, i].reshape(n_particles, 1, 1), (1, n_obstacles, 2)).reshape(-1, 2)
 
             obs_pos = obstacles_x + obs_dpos
@@ -102,20 +104,22 @@ class PSOFinder:
             min_dist = min_distance_to_obstacles(p1, p2, robot_v, obs_pos, obstacles_v, obstacles_size + 2, robot_size)
             mask = min_dist < 0
 
-            collision_penalty = -min_dist * mask.astype(int) * 1000000 # + np.abs(
-                # 10 * 1. / (min_dist + 1e-4)) * (~mask).astype(int)
+            collision_penalty = -min_dist * mask.astype(int) * 1000000 + np.abs(
+                1 * 1. / (min_dist + 1e-4)) * (~mask).astype(int)
             c_cost[:, i] = collision_penalty.reshape(n_particles, -1).sum(axis=1)
-            #if i > 0 and i < self.n_waypoints:
+            # if i > 0 and i < self.n_waypoints:
             #    c_cost[:, i] += 1 / np.linalg.norm(points_arr[-1][:, 0, :] - points[:, i, :].reshape(-1, 2), axis=-1)
             obs_dpos += t * obstacles_v
 
-        # smoothness_mask = angles > 90
-        # smoothness_cost = np.sum(1000000 * smoothness_mask.astype(int), axis=1)
+        smoothness_mask = angles > 90
+        smoothness_cost = np.sum(1000000 * smoothness_mask.astype(int), axis=1)
         # print("C_COST", c_cost.sum(axis=(1, 2)).copy())
         wpint = waypoints.astype(int)
 
-        boundary_cost = np.sum(((wpint < 0) | (wpint > self.map_size)).astype(int) * 1000000, axis=1)
-        cost = t_cost * 0.5 + c_cost.sum(axis=1) + d_cost * 20  + boundary_cost
+        w_time = 1
+        w_distance = 10
+        # boundary_cost = np.sum(((wpint < 0) | (wpint > self.map_size)).astype(int) * 1000000, axis=1)
+        cost = t_cost * w_time + c_cost.sum(axis=1) + d_cost * w_distance  # + boundary_cost  # + smoothness_cost
         return cost
 
     def calculate_path(self, obstacles, target, robot_pos, robot_size, robot_v, log_file=None):
@@ -127,7 +131,8 @@ class PSOFinder:
         init_solution = np.concatenate(init_solution)
         solution, info = PSO(fitness_func, LB=self.lb, UB=self.ub, nPop=self.population,
                              epochs=self.epochs, args=args,
-                             IntVar=[x + 1 for x in range(self.n_waypoints * 2)],
+                             rad=0.2,
+                             # IntVar=[x + 1 for x in range(self.n_waypoints * 2)],
                              Xinit=None, log_output=log_file)
         waypoints = solution[:-self.n_waypoints - 1]
         v = solution[-self.n_waypoints - 1:]
@@ -139,8 +144,11 @@ class PolarPSOFinder(PSOFinder):
     def __init__(self, n_waypoints=7, size=400, population=100, epochs=500, max_v=5, max_angle=60):
         super(PolarPSOFinder, self).__init__(n_waypoints, size, population, epochs, max_v)
         max_angle = np.deg2rad(max_angle)
+        self.max_angle = max_angle
+        self.max_v = max_v
+        self.map_size = size
         self.lb = np.concatenate(
-            [-np.ones(n_waypoints) * max_angle, np.zeros(n_waypoints), np.ones(n_waypoints + 1) * 0.1])
+            [-np.ones(n_waypoints) * max_angle, np.zeros(n_waypoints), np.ones(n_waypoints + 1) * 0.01])
         self.ub = np.concatenate(
             [np.ones(n_waypoints) * max_angle, np.ones(n_waypoints) * size, np.ones(n_waypoints + 1) * max_v])
 
@@ -166,6 +174,7 @@ class PolarPSOFinder(PSOFinder):
                 rotated_delta_x[j, :] = rotation_mat[j] @ delta_x[j]
             # print(
             #    f"{i} | Angle: {robot_angle[0] * 180 / np.pi} | X {delta_x[0]} -> XR {rotated_delta_x[0]} | Phi: {phi[0]*180/np.pi}")
+            # rotated_delta_x = delta_x
             Xz[:, 2 * i] = acc_robot_pos[:, 0] + rotated_delta_x[:, 0]
             Xz[:, 2 * i + 1] = acc_robot_pos[:, 1] + rotated_delta_x[:, 1]
             acc_robot_pos += rotated_delta_x
@@ -185,12 +194,14 @@ class PolarPSOFinder(PSOFinder):
         init_solution.append(np.ones(self.n_waypoints + 1) * 0.1)
         init_solution[-1][-1] = self.max_v
         init_solution = np.concatenate(init_solution)
+        robot_dir = robot_v
+        robot_angle = np.arctan2(robot_dir[1], robot_dir[0])
         solution, info = PSO(fitness_func, LB=self.lb, UB=self.ub, nPop=self.population,
                              epochs=self.epochs, args=args,
                              K=0,
-                             rad=0.5,
-                             IntVar=[x + 1 for x in range(self.n_waypoints * 2)],
-                             Xinit=init_solution, log_output=log_file)
+                             # rad=0.5,
+                             # IntVar=[x + 1 for x in range(self.n_waypoints * 2)],
+                             Xinit=None, log_output=log_file)
 
         solution = self._to_cartesian(np.expand_dims(solution, axis=0), robot_pos, target, robot_v)[0]
         waypoints = solution[:-self.n_waypoints - 1]
@@ -199,4 +210,7 @@ class PolarPSOFinder(PSOFinder):
 
 
 if __name__ == '__main__':
-    print(np.arctan2(-10, 10) * 180 / np.pi)
+    # print(np.arctan2(-10, 10) * 180 / np.pi)
+    print(angle_rowwise(
+        np.array([[0, -1]]), np.array([[1, 1]])
+    ))

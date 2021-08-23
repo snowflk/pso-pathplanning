@@ -90,7 +90,7 @@ class Robot(DynamicObject):
             return
         self._planner.tick_callback()
         dist_to_goal = np.linalg.norm(self.goal - self.x)
-        if dist_to_goal < 0.1:
+        if dist_to_goal < 1e-4:
             self._goal_reached = True
             self._logger.info("Reached goal")
             return

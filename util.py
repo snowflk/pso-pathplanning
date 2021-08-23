@@ -49,7 +49,7 @@ def min_distance_to_obstacles(from_pos, to_pos, v, ox, ov, os, robot_size):
     # Time for the robot to travel
     norm_axis = -1
     t = np.linalg.norm(to_pos - from_pos, axis=norm_axis) / (np.linalg.norm(v, axis=norm_axis) + 1e-4)
-
+    t = np.ceil(t).astype(int)
     # Change everything to the robot's coordinate system
     shifted_ox = ox - from_pos
     next_shifted_ox = shifted_ox + (ov - v) * np.tile(t.reshape(-1, 1), (1, 2))
@@ -66,7 +66,7 @@ if __name__ == '__main__':
     to_pos = np.array([30, 51]).reshape(1, 2)
     robot_size = 3
 
-    v = (to_pos-from_pos).reshape(1, 2)
+    v = (to_pos - from_pos).reshape(1, 2)
     v = v * 2.851476 / (np.linalg.norm(v, axis=-1) + 1e-9)
     ox = np.array([
         [45.4, 50],
@@ -74,4 +74,3 @@ if __name__ == '__main__':
     ov = np.array([0.2, 0])
     os = np.ones(ox.shape[0]) * 5
     print(min_distance_to_obstacles(from_pos, to_pos, v, ox, ov, os, robot_size))
-

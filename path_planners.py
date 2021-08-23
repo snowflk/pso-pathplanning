@@ -102,7 +102,7 @@ class PSOPlanner(PathPlanner):
         ])
 
         if self._current_plan_wps is not None and np.linalg.norm(
-                self._current_plan_wps[self._current_plan_idx] - current_pos) < 0.1:
+                self._current_plan_wps[self._current_plan_idx] - current_pos) < 1e-4:
             self._on_waypoint_reached()
 
         if not self.should_replan(current_pos, current_v, obstacles):
