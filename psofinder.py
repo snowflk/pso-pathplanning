@@ -105,13 +105,13 @@ class PSOFinder:
             mask = min_dist < 0
 
             collision_penalty = -min_dist * mask.astype(int) * 1000000 + np.abs(
-                1 * 1. / (min_dist + 1e-4)) * (~mask).astype(int)
+                3**2 / (min_dist + 1e-4)) * (~mask).astype(int)
             c_cost[:, i] = collision_penalty.reshape(n_particles, -1).sum(axis=1)
             # if i > 0 and i < self.n_waypoints:
             #    c_cost[:, i] += 1 / np.linalg.norm(points_arr[-1][:, 0, :] - points[:, i, :].reshape(-1, 2), axis=-1)
             obs_dpos += t * obstacles_v
 
-        smoothness_mask = angles > 90
+        smoothness_mask = angles > 60
         smoothness_cost = np.sum(1000000 * smoothness_mask.astype(int), axis=1)
         # print("C_COST", c_cost.sum(axis=(1, 2)).copy())
         wpint = waypoints.astype(int)
@@ -119,7 +119,7 @@ class PSOFinder:
         w_time = 1
         w_distance = 10
         # boundary_cost = np.sum(((wpint < 0) | (wpint > self.map_size)).astype(int) * 1000000, axis=1)
-        cost = t_cost * w_time + c_cost.sum(axis=1) + d_cost * w_distance  # + boundary_cost  # + smoothness_cost
+        cost = t_cost * w_time + c_cost.sum(axis=1) + d_cost * w_distance# + smoothness_cost
         return cost
 
     def calculate_path(self, obstacles, target, robot_pos, robot_size, robot_v, log_file=None):

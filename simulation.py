@@ -28,11 +28,11 @@ def make_planner(planner_type, robot_cfg, cfg):
     map_size = (cfg['width'], cfg['height'])
 
     if planner_type == 'PSO' or planner_type == 'PPSO':
-        return PSOPlanner(n_waypoints=5,
+        return PSOPlanner(n_waypoints=3,
                           max_velocity=cfg['max_v'],
                           population=30,
                           map_size=map_size,
-                          epochs=1000,
+                          epochs=3000,
                           robot_size=robot_cfg['size'],
                           use_polar=planner_type == 'PPSO',
                           max_angle=60, log_dir=LOG_DIR)
@@ -209,7 +209,7 @@ class Simulation:
 
 
 if __name__ == '__main__':
-    config_file = os.getenv('CFG', './config/basic.json')
+    config_file = os.getenv('CFG', './config/obs_rich_multi.json')
     planner_type = os.getenv('PLANNER', 'PPSO')
     image_out_dir = os.getenv('IMG_OUT', 'experiments')
     env_name = os.path.splitext(os.path.basename(config_file))[0]

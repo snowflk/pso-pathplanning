@@ -18,19 +18,22 @@
       "start_y": 5,
       "size": 3,
       "sensor_range": 20,
-      "goal_x": 90,
+      "goal_x": 70,
       "goal_y": 90,
       "color": "30,144,255"
+    },
+    {
+      "start_x": 50,
+      "start_y": 5,
+      "size": 3,
+      "sensor_range": 20,
+      "goal_x": 20,
+      "goal_y": 90,
+      "color": "243,156,18"
     }
   ],
   "obstacles": [
-    {
-      "start_x": 95,
-      "start_y": 74,
-      "v_x": 0.8,
-      "v_y": 0.4,
-      "size": 4
-    },
+
     {
       "start_x": 22,
       "start_y": 85,
@@ -106,13 +109,6 @@
       "start_y": 88,
       "v_x": 0.8,
       "v_y": 0.9,
-      "size": 4
-    },
-    {
-      "start_x": 93,
-      "start_y": 73,
-      "v_x": -0.6,
-      "v_y": 0.4,
       "size": 4
     }
   ]

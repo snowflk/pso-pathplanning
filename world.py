@@ -14,6 +14,7 @@ class DynamicObject:
             self._v = np.array(velocity, dtype=np.float64)
         self._size = size
         self.color = color
+        self._total_dist = 0
 
     @property
     def x(self):
@@ -33,11 +34,16 @@ class DynamicObject:
         self._logger.info(f"Next way point set: {self._next_waypoint}, velocity: {v}")
 
     @property
+    def total_travel_distance(self):
+        return self._total_dist
+
+    @property
     def size(self):
         return self._size
 
     def step(self):
         self._x += self._v
+        self._total_dist += np.linalg.norm(self._v)
 
     def did_collide_pos(self, other_pos, other_size, custom_size=None):
         r = custom_size or self._size
@@ -98,7 +104,7 @@ class Robot(DynamicObject):
         if self._next_waypoint is not None:
             dist_remaining = np.linalg.norm(self._next_waypoint - self._x)
             self._logger.info(f"{dist_remaining:.2f}m more to reach waypoint {self._next_waypoint}")
-            if dist_remaining < 0.1:
+            if dist_remaining < 1e-4:
                 self._next_waypoint = None
                 self._logger.info(f"Target way point reached")
 
@@ -157,6 +163,7 @@ class World:
         self._all: Set[DynamicObject] = self._obstacles.union(self._robots)
         self._logger = make_logger('World')
         self._map_size = map_size
+        self._t = 0
 
     def step(self):
         # Notify the robots about their surrounding (fake sensor)
@@ -164,8 +171,15 @@ class World:
         for r in self._robots:
             if not r.goal_reached():
                 should_end = False
+        self._logger.info(f"The simulation stopped after {self._t} ticks")
+        #for r in self._robots:
+        #    self._logger.info(f"Total distance {r.name}: {r.total_travel_distance}")
         if should_end:
+            self._logger.info(f"The simulation stopped after {self._t} ticks")
+            for r in self._robots:
+                self._logger.info(f"Total distance {r.name}: {r.total_travel_distance}")
             return
+        self._t += 1
         for r in self._robots:
             sensed = set()
             for other in self._all:

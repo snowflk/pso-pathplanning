@@ -19,7 +19,7 @@ def generate(n_obs=20, max_v=2, map_size=200, max_size=10, min_size=3, starting_
 
 
 if __name__ == '__main__':
-    obs = generate(map_size=100, max_size=5, min_size=3, max_v=1, n_obs=13)
+    obs = generate(map_size=100, max_size=5, min_size=3, max_v=1, n_obs=20)
     out = './config/obs_rich.json'
     with open(out, 'r') as f:
         data = json.load(f)
